@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:jms="http://www.mulesoft.org/schema/mule/jms" xmlns:sfdc="http://www.mulesoft.org/schema/mule/sfdc" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/sfdc http://www.mulesoft.org/schema/mule/sfdc/current/mule-sfdc.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd">
+    <context:property-placeholder location="test.properties"/>
+    
+    <flow name="messageGenerator">
+        <http:listener config-ref="HTTPListener" path="/fullname" allowedMethods="POST" metadata:id="aa0746d9-3df7-4955-88fc-c85aa420a175" doc:name="HTTP"/>
+        <logger message="HTTP POST body: #[payload]" level="DEBUG" category="software.hoegg.mocking-services.messageGenerator" doc:name="DEBUG"/>
+        <json:json-to-object-transformer returnClass="java.util.HashMap" mimeType="application/java" doc:name="JSON to Object"/>
+        <db:select config-ref="MSSQLServer" doc:name="Database">
+            <db:parameterized-query><![CDATA[SELECT * FROM contacts WHERE fullname = #[payload.fullname]]]></db:parameterized-query>
+        </db:select>
+        <set-payload value="#[payload[0]]" doc:name="Set Payload"/>
+        <json:object-to-json-transformer doc:name="Object to JSON"/>
+        <logger message="Object from Database: #[payload]" level="DEBUG" category="software.hoegg.mocking-services.messageGenerator" doc:name="DEBUG"/>
+        <jms:outbound-endpoint  queue="${activemq.queue}" connector-ref="ActiveMQ" doc:name="JMS">
+        </jms:outbound-endpoint>
+    </flow>
+    
+    <flow name="messageConsumer">
+        <jms:inbound-endpoint queue="${activemq.queue}" connector-ref="ActiveMQ" doc:name="JMS" />
+        <logger message="Message from JMS queue: #[message.payloadAs(java.lang.String)]" level="DEBUG" category="software.hoegg.mocking-services.messageConsumer" doc:name="DEBUG"/>
+        <json:json-to-object-transformer returnClass="java.util.HashMap" mimeType="application/java" doc:name="JSON to Object"/>
+        <dw:transform-message doc:name="Transform Message">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+[{
+	Salutation: payload.salutation,
+	First_Name: payload.firstname,
+	Last_Name: payload.lastname,
+	Birth_Date: payload.birthdate,
+	Title: payload.title,
+	Phone: payload.phone,
+	Email: payload.email,
+	Mailing_Street: payload.street,
+	Mailing_City: payload.city,
+	Mailing_State: payload.state,
+	Mailing_Zip: payload.zip,
+	Mailing_Country: payload.country
+}]]]></dw:set-payload>
+        </dw:transform-message>
+        <logger message="Message to Salesforce: #[message.payloadAs(java.lang.String)]" level="DEBUG" category="software.hoegg.mocking-services.messageConsumer" doc:name="DEBUG"/>
+        <sfdc:upsert config-ref="SalesforceAuth" externalIdFieldName="Last_Name" type="Contact (Contact)" doc:name="Salesforce">
+            <sfdc:objects ref="#[payload]"/>
+        </sfdc:upsert>
+    </flow>
+</mule>
