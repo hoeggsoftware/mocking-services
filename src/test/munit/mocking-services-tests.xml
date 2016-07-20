@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:mock="http://www.mulesoft.org/schema/mule/mock" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:munit="http://www.mulesoft.org/schema/mule/munit" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:core="http://www.mulesoft.org/schema/mule/core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/mock http://www.mulesoft.org/schema/mule/mock/current/mule-mock.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd">
+    <munit:config name="munit" doc:name="MUnit configuration"/>
+    
+    <spring:beans>
+        <spring:import resource="classpath:mocking-services.xml"/>
+        <spring:import resource="classpath:global.xml"/>
+    </spring:beans>
+    
+    <context:property-placeholder location="test.properties"/>
+    
+    <munit:test name="mocking-services-tests-messageGeneratorTest" description="Test">
+        <mock:when messageProcessor="db:select" doc:name="Mock Database">
+            <mock:then-return payload="#[ [ [ &quot;salutation&quot; : &quot;Mr.&quot; , &quot;fullname&quot; : &quot;Reed McCartney&quot; , &quot;firstname&quot; : &quot;Reed&quot; , &quot;lastname&quot; : &quot;McCartney&quot; , &quot;birthdate&quot; : &quot;03/04/1993&quot; , &quot;title&quot; : &quot;Software Engineer&quot; , &quot;phone&quot; : &quot;(555) 555-5555&quot; , &quot;email&quot; : &quot;test@email&quot; , &quot;street&quot; : &quot;Street&quot; , &quot;city&quot; : &quot;City&quot; , &quot;state&quot; : &quot;State&quot; , &quot;zip&quot; : &quot;Zip&quot; , &quot;country&quot; : &quot;Country&quot; ] ] ]"/>
+        </mock:when>
+        <mock:when messageProcessor="jms:outbound-endpoint" doc:name="Mock JMS">
+            <mock:then-return payload="#[]"/>
+        </mock:when>
+        <mock:spy messageProcessor="jms:outbound-endpoint" doc:name="Spy">
+            <mock:assertions-before-call>
+                <enricher target="variable:parsedPayload" doc:name="Message Enricher">
+                    <json:json-to-object-transformer returnClass="java.util.HashMap" mimeType="application/java" doc:name="JSON to Object"/>
+                </enricher>
+                <munit:assert-on-equals expectedValue="Mr." actualValue="#[parsedPayload.salutation]" doc:name="Assert Salutation"/>
+                <munit:assert-on-equals expectedValue="Reed McCartney" actualValue="#[parsedPayload.fullname]" doc:name="Assert Full Name"/>
+                <munit:assert-on-equals expectedValue="Reed" actualValue="#[parsedPayload.firstname]" doc:name="Assert First Name"/>
+                <munit:assert-on-equals expectedValue="McCartney" actualValue="#[parsedPayload.lastname]" doc:name="Assert Last Name"/>
+                <munit:assert-on-equals expectedValue="03/04/1993" actualValue="#[parsedPayload.birthdate]" doc:name="Assert Birthdate"/>
+                <munit:assert-on-equals expectedValue="Software Engineer" actualValue="#[parsedPayload.title]" doc:name="Assert Title"/>
+                <munit:assert-on-equals expectedValue="(555) 555-5555" actualValue="#[parsedPayload.phone]" doc:name="Assert Phone"/>
+                <munit:assert-on-equals expectedValue="test@email" actualValue="#[parsedPayload.email]" doc:name="Assert Email"/>
+                <munit:assert-on-equals expectedValue="Street" actualValue="#[parsedPayload.street]" doc:name="Assert Street"/>
+                <munit:assert-on-equals expectedValue="City" actualValue="#[parsedPayload.city]" doc:name="Assert City"/>
+                <munit:assert-on-equals expectedValue="State" actualValue="#[parsedPayload.state]" doc:name="Assert State"/>
+                <munit:assert-on-equals expectedValue="Zip" actualValue="#[parsedPayload.zip]" doc:name="Assert Zip"/>
+                <munit:assert-on-equals expectedValue="Country" actualValue="#[parsedPayload.country]" doc:name="Assert Country"/>
+            </mock:assertions-before-call>
+        </mock:spy>
+        <munit:set payload="#[getResource(&quot;test-input.json&quot;).asString()]" doc:name="Set Message"/>
+        <flow-ref name="messageGenerator" doc:name="messageGenerator"/>
+    </munit:test>
+    
+    <munit:test name="mocking-services-tests-messageConsumerTest" description="Test">
+        <mock:when messageProcessor="sfdc:upsert" doc:name="Mock Salesforce">
+            <mock:then-return payload="#[]"/>
+        </mock:when>
+        <mock:spy messageProcessor="sfdc:upsert" doc:name="Spy">
+            <mock:assertions-before-call>
+                <munit:assert-on-equals expectedValue="Mr." actualValue="#[payload[0].Salutation]" doc:name="Assert Salutation"/>
+                <munit:assert-on-equals expectedValue="Reed" actualValue="#[payload[0].First_Name]" doc:name="Assert First Name"/>
+                <munit:assert-on-equals expectedValue="McCartney" actualValue="#[payload[0].Last_Name]" doc:name="Assert Last Name"/>
+                <munit:assert-on-equals expectedValue="03/04/1993" actualValue="#[payload[0].Birth_Date]" doc:name="Assert Birthdate"/>
+                <munit:assert-on-equals expectedValue="Software Engineer" actualValue="#[payload[0].Title]" doc:name="Assert Title"/>
+                <munit:assert-on-equals expectedValue="(555) 555-5555" actualValue="#[payload[0].Phone]" doc:name="Assert Phone"/>
+                <munit:assert-on-equals expectedValue="test@email" actualValue="#[payload[0].Email]" doc:name="Assert Email"/>
+                <munit:assert-on-equals expectedValue="Street" actualValue="#[payload[0].Mailing_Street]" doc:name="Assert Street"/>
+                <munit:assert-on-equals expectedValue="City" actualValue="#[payload[0].Mailing_City]" doc:name="Assert City"/>
+                <munit:assert-on-equals expectedValue="State" actualValue="#[payload[0].Mailing_State]" doc:name="Assert State"/>
+                <munit:assert-on-equals expectedValue="Zip" actualValue="#[payload[0].Mailing_Zip]" doc:name="Assert Zip"/>
+                <munit:assert-on-equals expectedValue="Country" actualValue="#[payload[0].Mailing_Country]" doc:name="Assert Country"/>
+            </mock:assertions-before-call>
+        </mock:spy>
+        <munit:set payload="#[getResource(&quot;test-jms-message.json&quot;).asString()]" doc:name="Set Message"/>
+        <flow-ref name="messageConsumer" doc:name="messageConsumer"/>
+    </munit:test>
+</mule>
